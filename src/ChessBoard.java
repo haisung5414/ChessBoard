@@ -153,6 +153,7 @@ public class ChessBoard {
 		chessBoardStatus[y][x] = piece;
 	}
 	//주어진 위치에 기물을 놓고, 기물 정보 업데이트
+	//증요! chessBoardStatus y x임. x y 가 아니라. 순서에 주의
 
 	public Piece getIcon(int x, int y){
 		return chessBoardStatus[y][x];
@@ -208,7 +209,7 @@ public class ChessBoard {
 
 //======================================================Implement below=================================================================//		
 enum MagicType {MARK, CHECK, CHECKMATE};
-	private int selX, selY;
+	private int selectedX, selectedY; //PENDING 단계에서 골랐던 위치
 	private boolean check, checkmate, end, isCheckmateChecked;
 
 	enum ChessboardState { PENDING, EXECUTION };
@@ -230,6 +231,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		}
 		public void actionPerformed(ActionEvent e) {	// Only modify here
 			// (x, y) is where the click event occured
+			System.out.println(x + " " + y);
 			loop(x,y);
 		}
 	}
@@ -238,9 +240,11 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		//여기서 내가 설정한 다른 변수들을 초기화한다.
 	}
 
+
 	void loop(int x, int y){
 		if (this.currentState == ChessboardState.PENDING) {
-			Piece selectedPiece = this.getIcon(x, y);
+			selectedX = x;
+			selectedY = y;
 			processPendingLogic(x, y);
 		} else {
 			processExecutionLogic(x, y);
@@ -248,19 +252,29 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	}
 	void processPendingLogic(int x, int y){
 		Piece selectedPiece = this.getIcon(x, y);
+		//각 사람의 턴이라는 것
+		//그 사람의 턴일 때 체크라는 것
+		//누구의 턴이고 체크메이트라는 것
+		//메세지로 나타내야한다.
+		//체크메이트가 되면 그 상태에서 어떤 클릭을 해도 동작안한다.
 
 		//체크메이트 검사하기
 		if(check&&!isCheckmateChecked){// 체크이고, 체크메이트 검사를 하지 않은 경우
 			Vector<Coordinate> possiblePosition = new Vector<>();
 			Vector<Coordinate> myPieceList = listOfEveryPiece.getPieceList(currentPlayer);
 			for(Coordinate myPiece : myPieceList){
-				possiblePosition.addAll(getMovablePosition(getIcon(myPiece.x, myPiece.y)));
+				possiblePosition.addAll(getMovablePosition(myPiece.x, myPiece.y));
 				//가능한 위치를 담은 벡터에, myPieceList의 원소 myPiece의 이동가능한 위치를 담는다.
 				//나의 모든 기물들이 이동가능한 위치가 없으면, 그 때는 체크메이트이다. (혹은 스테일메이트)
 			}
 
 			if(myPieceList.isEmpty()){
 				checkmate = true;
+				if(currentPlayer == PlayerColor.white){
+					setStatus("Checkmate! white WIN");
+				}else{
+					setStatus("Checkmate! black WIN");
+				}
 				/**
 				 * 체크메이트!
 				 * 여기서 끝을 내야 한다.
@@ -273,7 +287,6 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 		//모든 타일 원래 색깔로
 		flushMarkedCoordinate();
-
 		//현재 차례인 사람 표시
 		showWhosTurn();
 
@@ -281,7 +294,9 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		if(selectedPiece.color == currentPlayer){
 			this.currentState = ChessboardState.EXECUTION;
 			//이동가능위치확인(); -> markedCoordinates에 넣자.
+			markedCoordinate = getMovablePosition(x, y);
 			//이동 가능경로 화면에 표시();
+			markCoordinate(markedCoordinate);
 		}
 	}
 
@@ -292,39 +307,57 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 		Piece selectedPiece = getIcon(x, y);
 
-		if(selectedPiece.color == opponentColor){
-			//상대 기물을 잡는 경우
+		if(listOfEveryPiece.findPiece(markedCoordinate, new Coordinate(x, y)) != -1){//즉 클릭한 곳이 마킹된 곳이면
+			//상대 기물 잡을 때와 빈 칸으로 움직일 때를 굳이 구분할 필요 없이 동일한 코드로 가능함.
 
-			//상대 기물 리스트에서 잡은 기물 삭제
+			//전체 기물 리스트들 새로고침
+			listOfEveryPiece.movePiece(currentPlayer, new Coordinate(selectedX, selectedY), new Coordinate(x, y));
 			//내 기물 그곳으로 이동
-
+			setIcon(x, y, this.getIcon(this.selectedX, this.selectedY));
+			setIcon(this.selectedX, this.selectedY, new Piece());
 			//턴 바꾸기
-			//currentPlayer = opponentColor;
-			//opponentColor = PlayerColor.none;
+			this.currentPlayer = opponentColor;
 
-			//상대 킹 입장에서 체크인지 확인하기;
+			//체크 플래그 false로. 어짜피 체크를 없앨 수 있는 위치로밖에 못 움직인다.
+			//만약 움직이지 못했다면 그대로 게임 끝남.
+			check = false;
 
-			//isCheckmateChecked = false;
+			//상대 킹 입장에서 체크인지 확인하기
+			check = isKingCheck(findKing(opponentColor,chessBoardStatus), chessBoardStatus);
 
+			// 아까 체크메이트 여부 검사했었음을 나타내는 플래그를 다시 false로
+			isCheckmateChecked = false;
 			//이동가능한 좌표 리스트 비우기
-		}else if(/*해당 위치가 이동가능한 칸이 아님*/){
-			//state 변경 -> PENDING
-		}else{
-			//내 기물 그곳으로 이동;
-
-			//내 기물 리스트 업데이트;
-
-			//턴 바꾸기; currentPlayer, opponentColor 재설정
-
+			markedCoordinate = new Vector<Coordinate>();
 			//state 변경
+			this.currentState = ChessboardState.PENDING;
 
-			//isCheckmateChecked = false;
+		}else{ //클릭한 곳이 마킹되지 않은 곳
+			this.currentState = ChessboardState.PENDING;
 		}
 	}
 
-	//////////////////////뷰 - 보여지는 부분 메서드///////////////////////
+	//////////////////////보여지는 부분 메서드///////////////////////
+
+	void markCoordinate(Vector<Coordinate> v){
+		for (Coordinate c : v){
+			markPosition(c.x, c.y);
+		}
+	}
+
+	PlayerColor changePlayer(){
+		if(this.currentPlayer == PlayerColor.black){
+			return PlayerColor.white;
+		}else if(this.currentPlayer == PlayerColor.white){
+			return PlayerColor.black;
+		}else{
+			System.out.println("Error in changePlayer, currentPlayer is none");
+			return null;
+		}
+	}
+
 	/**
-	 * 선택 가능한 좌표 리스트를 비우고, 하이라이트를 끈다.
+	 * 모든 하이라이트를 끈다.
 	 */
 	void flushMarkedCoordinate() {
 		for(int i=0; i<8;i++){
@@ -347,30 +380,39 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 	/**
 	 * 어떤 기물이 이동가능한 위치를 알아내기.
-	 * @param myPiece
+	 * @param x
+	 * @param y
 	 * @return myPiece가 이동할 수 있는 곳의 Coordinate를 담은 Vector
 	 */
-	Vector<Coordinate> getMovablePosition(Piece myPiece){
-		Vector<Coordinate> availablePositions = new Vector<>();
-		Vector<Coordinate> certifiedPositions = new Vector<>();
+	Vector<Coordinate> getMovablePosition(int x, int y){
 
-		return certifiedPositions;
-	}
+		Vector<Coordinate> availableCoord = getAvailableCoordinates(x, y);
+		Vector<Coordinate> certifiedCoord = getKingSafeCoordinates(availableCoord, new Coordinate(x,y), currentPlayer);
+
+		return certifiedCoord;
+	}//완성
+
+
 
 	////////////////////각 기물별 움직임/////////////////////
 
+	/**
+	 * 기물이 움직일 때, 움직였을 때 왕이 체크되지 않는 좌표를 반환하는 함수
+	 * @param availablePositions 해당 기물이 움직일 수 있는 좌표들 벡터
+	 * @param movingPiece 움직이는 기물의 위치좌표
+	 * @param color 확인하려는 플레이어의 색
+	 * @return 왕이 체크되지 않는 좌표들의 벡터를 반환
+	 */
 	Vector<Coordinate> getKingSafeCoordinates(Vector<Coordinate> availablePositions, Coordinate movingPiece, PlayerColor color){
 
 		//이거를 만드려면 대각선, 수직방향 검색 메서드를 만들어줘야함.
 		Piece piece = getIcon(movingPiece.x, movingPiece.y);
-//		ChessBoard tempChessBoard = new ChessBoard();
-//		/////////문제!!!!! 위처럼 하면 아예 게임이 새로 시작되어버린다.
 
 		//가능한 이동 경로들에 대해 기물이 실제 이동한 경우를 저장하기위한 임시 체스보드
 		Piece[][] tempChessBoard = new Piece[8][8];
 
 		//움직일 수 있는 칸들을 저장하기 위해
-		Vector<Coordinate> certified_Vector = new Vector<>();
+		Vector<Coordinate> certifiedVector = new Vector<>();
 
 		for(Coordinate pCoord : availablePositions){
 			//tempChessBoard 에 current_ChessBoard 에서 movingPiece 삭제,
@@ -380,27 +422,52 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			//currentPlayer가 항상 검사하고자 하는 그 킹이 맞는지 헷갈려서 그냥 찾고자 하는 king의 색을 파라미터로 받음.
 			Coordinate kingCoord = findKing(color, tempChessBoard);
 
-			해당 temp를 가지고 아래의 검사를 시행.
-
+			//해당 temp를 가지고 아래의 검사를 시행.
 			if(!isKingCheck(kingCoord, tempChessBoard)){
-				certified_Vector.append(pCoord);
-			}/*
-			킹을 중심으로
-			대각선 각 방향으로 퀸, 비숍
-			대각선 앞쪽 방향으로 폰
-			나이트 이동 가능위치에 나이트
-			직각 각 방향으로 퀸, 룩
-			있는지 확인하고 하나라도 있다면 그냥 지나가고
-			없다면
-			certified_Vector에 넣어.
-			(죽 길게 있는 놈들의 경우 아래 함수를 재사용하고 마지막 원소를 쓰면 된다.)
-			*/
+				certifiedVector.add(pCoord);
+			}
 		}
-		return certified_Vector;
+		return certifiedVector;
 	}
 
-	boolean isKingCheck(Coordinate kingCoord, Piece[][] curChessBoard){
+	/**
+	 * 어떤 기물을 주어진 좌표로 옮긴 상태의 체스판을 반환
+	 * @param curChessBoard 현재 체스판의 기물상황
+	 * @param targetPieceCoord 옮길 기물의 좌표
+	 * @param moveTo 옮길 곳의 좌표
+	 * @return
+	 */
+	Piece[][] movePieceToNewPos(Piece[][] curChessBoard, Coordinate targetPieceCoord, Coordinate moveTo) {
+		Piece[][] changedChessBoard = new Piece[8][8];
+		for (int i = 0; i < 8; i++) {
+			for (int j = 0; j < 8; j++) {
+				changedChessBoard[i][j] = new Piece(curChessBoard[i][j].color, curChessBoard[i][j].type);
+			}
+		}
+		//x,y순서 맞나 봐라.
+		changedChessBoard[moveTo.y][moveTo.x] = new Piece(curChessBoard[targetPieceCoord.y][targetPieceCoord.x].color, curChessBoard[targetPieceCoord.y][targetPieceCoord.x].type);
+		changedChessBoard[targetPieceCoord.y][targetPieceCoord.x] = new Piece();
+		return changedChessBoard;
+	}
 
+	/**
+	 * 킹이 체크당했는지 확인한다.
+	 * @param kingCoord 킹의 위치
+	 * @param curChessBoard 확인하려는 체스판의 기물상황
+	 * @return 킹이 체크이면 true, 그렇지 않으면 false.
+	 */
+	boolean isKingCheck(Coordinate kingCoord, Piece[][] curChessBoard){
+		/*
+		킹을 중심으로
+		대각선 각 방향으로 퀸, 비숍
+		대각선 앞쪽 방향으로 폰
+		나이트 이동 가능위치에 나이트
+		직각 각 방향으로 퀸, 룩
+		있는지 확인하고 하나라도 있다면 true
+		없다면 false
+		(죽 길게 있는 놈들의 경우 아래 함수를 재사용하고 마지막 원소를 쓰면 된다.)
+		*/
+		return false;
 	}
 
 	/**
@@ -410,9 +477,24 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	 * @return 킹의 좌표
 	 */
 	Coordinate findKing(PlayerColor color, Piece[][] curChessBoard){
+		Coordinate kingCoord = new Coordinate();
 
+		return kingCoord;
 	}
 
+	Vector<Coordinate> getAvailableCoordinates(int x, int y){
+		Vector<Coordinate> candidate = new Vector<>();
+		Piece piece = getIcon(x, y);
+		//들어온 좌표의 기물에 맞는 메서드를 불러서 쓰자.
+		switch (piece.type) {
+			case pawn -> candidate.addAll(getAvailablePawnCoordinates(x, y));
+//			case knight -> candidate.addAll(getAvailableKnightCoordinate(piece.color, x, y));
+//			case bishop -> candidate.addAll(getAvailableBishopCoordinate(piece.color, x, y));
+//			case rook -> candidate.addAll(getAvailableRookCoordinate(piece.color, x, y));
+//			case queen -> candidate.addAll(getAvailableQueenCoordinate(piece.color, x, y));
+		}
+		return candidate;
+	}
 
 	/**
 	 * 폰이 이동할 수 있는 좌표의 리스트를 반환한다.
@@ -466,11 +548,11 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 		return result;
 	}
-	Vector<Coordinate> getAvailableRookCoordinates(){}
-	Vector<Coordinate> getAvailableKnightCoordinates(){}
-	Vector<Coordinate> getAvailableBishopCoordinates(){}
-	Vector<Coordinate> getAvailableQueenCoordinates(){}
-	Vector<Coordinate> getAvailableKingCoordinates(){}
+//	Vector<Coordinate> getAvailableRookCoordinates(){}
+//	Vector<Coordinate> getAvailableKnightCoordinates(){}
+//	Vector<Coordinate> getAvailableBishopCoordinates(){}
+//	Vector<Coordinate> getAvailableQueenCoordinates(){}
+//	Vector<Coordinate> getAvailableKingCoordinates(){}
 
 	/////////////////////세부 움직임 구현////////////////////////
 
@@ -769,9 +851,10 @@ class ListOfEveryPiece {
 
 	ListOfEveryPiece(){
 		for(int i = 0; i<8 ; i++){
-			for(int j=0; j<1 ; j++){
+			for(int j=0; j<2 ; j++){
 				Coordinate c = new Coordinate(j,i);
 				blackPiece.add(c);
+				// 이게 제대로 blackPiece들을 대표하는게 맞는가?
 			}
 			for(int j=6; j<8; j++){
 				Coordinate c = new Coordinate(j,i);
@@ -781,7 +864,7 @@ class ListOfEveryPiece {
 	}
 	//주어진 벡터에서 주어진 target좌표를 찾아서 그 인덱스 반환
 	//없을 경우, -1을 반환
-	private int findPiece(Vector<Coordinate> pieceList, Coordinate targetCoord){
+	public int findPiece(Vector<Coordinate> pieceList, Coordinate targetCoord){
 		for(int i=0; i<pieceList.size(); i++){
 			if(pieceList.get(i).x == targetCoord.x && pieceList.get(i).y == targetCoord.y){
 				return i;
@@ -802,14 +885,20 @@ class ListOfEveryPiece {
 	public void moveBlackPiece(Coordinate from, Coordinate to){
 		int indexOfFrom = findPiece(blackPiece, from);
 		this.blackPiece.remove(indexOfFrom);
+		removePiece(to);
 		this.blackPiece.add(indexOfFrom,to);
 	}
 	public void moveWhitePiece(Coordinate from, Coordinate to){
 		int indexOfFrom = findPiece(whitePiece, from);
 		this.whitePiece.remove(indexOfFrom);
-		this.blackPiece.add(indexOfFrom, to);
+		//전체에서 to라는 좌표를 삭제하고(반대편에 있을 경우를 위해)
+		removePiece(to);
+		this.whitePiece.add(indexOfFrom, to); //다시 whitePiece 벡터에 더해준다.
 	}
 	public void movePiece(PlayerColor currentPlayer, Coordinate from, Coordinate to){
+		//해당되는 기존 좌표값 삭제
+		//새로운 좌표값 추가
+		//옮긴 곳에 상대편 기물 있을 때 그 좌표도 리스트에서 삭제
 		if(currentPlayer == PlayerColor.white){
 			moveWhitePiece(from, to);
 		}else if(currentPlayer == PlayerColor.black){
