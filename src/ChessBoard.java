@@ -218,7 +218,6 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	private PlayerColor currentPlayer = PlayerColor.white;
 	private Vector<Coordinate> markedCoordinate = new Vector<>();
 	private Vector<Coordinate> avoidCheckedCoordinate = new Vector<>();
-	private boolean doubleChecked = false;
 
 	ListOfEveryPiece listOfEveryPiece = new ListOfEveryPiece();
 
@@ -238,11 +237,24 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	
 	void onInitiateBoard(){
 		//여기서 내가 설정한 다른 변수들을 초기화한다.
+		listOfEveryPiece = new ListOfEveryPiece();
+		selectedY = 0;
+		selectedX = 0;
+		check = false;
+		checkmate = false;
+		isCheckmateChecked = false;
+		end = false;
+		currentState = ChessboardState.PENDING;
+		currentPlayer = PlayerColor.white;
+		markedCoordinate = new Vector<>();
+		showWhosTurn();
 	}
 
 
 	void loop(int x, int y){
-		if (this.currentState == ChessboardState.PENDING) {
+		if(checkmate){
+			//클릭해도 아무 일도 안 일어난다.
+		}else if (this.currentState == ChessboardState.PENDING) {
 			selectedX = x;
 			selectedY = y;
 			processPendingLogic(x, y);
@@ -257,38 +269,6 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		//누구의 턴이고 체크메이트라는 것
 		//메세지로 나타내야한다.
 		//체크메이트가 되면 그 상태에서 어떤 클릭을 해도 동작안한다.
-
-
-
-		//현재 차례인 사람 표시
-		showWhosTurn();
-
-		//체크메이트 검사하기
-		if(check&&!isCheckmateChecked){// 체크이고, 체크메이트 검사를 하지 않은 경우
-			Vector<Coordinate> possiblePosition = new Vector<>();
-			Vector<Coordinate> myPieceList = listOfEveryPiece.getPieceList(currentPlayer);
-			for(Coordinate myPiece : myPieceList){
-				possiblePosition.addAll(getMovablePosition(myPiece.x, myPiece.y));
-				//가능한 위치를 담은 벡터에, myPieceList의 원소 myPiece의 이동가능한 위치를 담는다.
-				//나의 모든 기물들이 이동가능한 위치가 없으면, 그 때는 체크메이트이다. (혹은 스테일메이트)
-			}
-
-			if(myPieceList.isEmpty()){
-				checkmate = true;
-				if(currentPlayer == PlayerColor.white){
-					setStatus("Checkmate! white WIN");
-				}else{
-					setStatus("Checkmate! black WIN");
-				}
-				/**
-				 * 체크메이트!
-				 * 여기서 끝을 내야 한다.
-				 */
-			}else{
-				isCheckmateChecked = true;
-				// 이 flag다시 false로 돌리는 시점은 state2에서 최종 선택시
-			}
-		}
 
 
 		//클릭 받아서 state2 execution으로 넘어가기
@@ -340,6 +320,36 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		}
 		//모든 타일 원래 색깔로
 		flushMarkedCoordinate();
+		//턴 바뀐 것 나타내기
+		showWhosTurn();
+
+
+		//체크메이트 검사하기
+		if(check&&!isCheckmateChecked){// 체크이고, 체크메이트 검사를 하지 않은 경우
+			/////////////디버깅
+			System.out.println("쳌메 검사 : ");
+
+			Vector<Coordinate> possiblePosition = new Vector<>();
+			Vector<Coordinate> myPieceList = listOfEveryPiece.getPieceList(currentPlayer); //현재 플레이어가 가진 모든 기물들에 대한 좌표 벡터
+			for(Coordinate myPiece : myPieceList){ //현재 플레이어의 모든 기물들에 대해서, 이동 가능한 위치를 검사하여 더해준다.
+				possiblePosition.addAll(getMovablePosition(myPiece.x, myPiece.y));
+				//가능한 위치를 담은 벡터에, myPieceList의 원소 myPiece의 이동가능한 위치를 담는다.
+				//나의 모든 기물들이 이동가능한 위치가 없으면, 그 때는 체크메이트이다. (혹은 스테일메이트)
+			}
+
+			//////////디버깅
+			System.out.println("체크메이트 검사결과 " + possiblePosition.isEmpty());
+
+			if(possiblePosition.isEmpty()){
+				checkmate = true;
+			}else{
+				isCheckmateChecked = true;
+				// 이 flag다시 false로 돌리는 시점은 state2에서 최종 선택시
+			}
+		}
+
+		//현재 체크인지, 체크메이트인지 확인해서 띄워줄 수 있음.
+		showWhosTurn(check,checkmate); //이 메서드 안에서 현재 플레이어를 확인해서 알아서 체크메이트 띄워준다.
 	}
 
 	//////////////////////보여지는 부분 메서드///////////////////////
@@ -383,6 +393,24 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		}
 	}
 
+	void showWhosTurn(boolean check, boolean checkmate){
+		if(check && !checkmate){
+			if(currentPlayer == PlayerColor.white){
+				setStatus("White's Turn/CHECK");
+			}else if(currentPlayer == PlayerColor.black){
+				setStatus("Black's Turn/CHECK");
+			}
+		}else if(check && checkmate){
+			if(currentPlayer == PlayerColor.white){
+				setStatus("White's Turn/CHECKMATE");
+			}else if(currentPlayer == PlayerColor.black){
+				setStatus("Black's Turn/CHECKMATE");
+			}
+		}else{
+			showWhosTurn();
+		}
+	}
+
 	/**
 	 * 어떤 기물이 이동가능한 위치를 알아내기.
 	 * @param x
@@ -392,7 +420,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	Vector<Coordinate> getMovablePosition(int x, int y){
 
 		Vector<Coordinate> availableCoord = getAvailableCoordinates(x, y);
-		Vector<Coordinate> certifiedCoord = getKingSafeCoordinates(availableCoord, new Coordinate(x,y), currentPlayer);
+		Vector<Coordinate> certifiedCoord = getKingSafeCoordinates(availableCoord, new Coordinate(x,y), getIcon(x, y).color);
 
 		return certifiedCoord;
 	}//완성
@@ -406,7 +434,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	 * @param availablePositions 해당 기물이 움직일 수 있는 좌표들 벡터
 	 * @param movingPiece 움직이는 기물의 위치좌표
 	 * @param color 확인하려는 플레이어의 색
-	 * @return 왕이 체크되지 않는 좌표들의 벡터를 반환
+	 * @return 왕이 체크되지 않는 좌표들의 벡터를 반환. 즉 기물이 움직일 수 있는 위치.
 	 */
 	Vector<Coordinate> getKingSafeCoordinates(Vector<Coordinate> availablePositions, Coordinate movingPiece, PlayerColor color){
 
@@ -430,6 +458,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			//해당 temp를 가지고 아래의 검사를 시행.
 			if(!isKingCheck(kingCoord, tempChessBoard)){
 				certifiedVector.add(pCoord);
+				////////////디버깅용
+				System.out.println("kingSafeCoords| "+ pCoord.x + ", "+ pCoord.y);
 			}
 		}
 		return certifiedVector;
@@ -465,6 +495,9 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		PlayerColor kingColor = curChessBoard[kingCoord.y][kingCoord.x].color;
 		PlayerColor opponentColor = (kingColor == PlayerColor.white) ? PlayerColor.black : PlayerColor.white;
 
+		//////////////////////디버깅용
+		System.out.println("isKingCheck| kingPos: " + kingCoord.x + ", " + kingCoord.y);
+
 		// 대각선 방향 검사 (퀸, 비숍)
 		int[][] diagDirections = { {-1, -1}, {-1, 1}, {1, -1}, {1, 1} }; //offset
 		for (int[] dir : diagDirections) {
@@ -477,6 +510,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 				if (p.color == kingColor) break; // 아군 기물인 경우 다른 방향 대각선을 검사하러 가기 위해 break
 				if (p.color == opponentColor) { //적 기물인 경우
 					if (p.type == PieceType.queen || p.type == PieceType.bishop) {
+						////////////디버깅
+						System.out.println("KingChecked by queen or bishop at (" + x + ", " + y + ")");
 						return true;
 					} else break;
 				}
@@ -497,6 +532,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			if (checkInBorder(newX, newY)) { //검사하려는 칸이 체스판 안에 있는 경우
 				Piece p = curChessBoard[newY][newX]; //검사하려는 칸의 기물
 				if (p.color == opponentColor && p.type == PieceType.pawn) {
+					////////////디버깅
+					System.out.println("KingChecked by pawn at (" + newX + ", " + newY + ")");
 					return true;
 				}
 			}
@@ -514,6 +551,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 				if (p.color == kingColor) break;
 				if (p.color == opponentColor) {
 					if (p.type == PieceType.queen || p.type == PieceType.rook) {
+						////////////디버깅
+						System.out.println("KingChecked by queen or rook at (" + x + ", " + y + ")");
 						return true;
 					} else break;
 				}
@@ -529,6 +568,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			if (checkInBorder(newX, newY)) { //각 knightMoves의 움직임에 대해서, 그 칸이 체스판 위에 있는 경우
 				Piece p = curChessBoard[newY][newX];
 				if (p.color == opponentColor && p.type == PieceType.knight) {
+					////////////디버깅
+					System.out.println("KingChecked by knight at (" + newX + ", " + newY + ")");
 					return true;
 				}
 			}
@@ -547,7 +588,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		Coordinate kingCoord = new Coordinate();
 		for(int y=0; y<8;y++){
 			for(int x=0; x<8 ; x++){
-				if(curChessBoard[y][x].type == PieceType.king || curChessBoard[y][x].color == color){
+				if(curChessBoard[y][x].type == PieceType.king && curChessBoard[y][x].color == color){
 					kingCoord = new Coordinate(x, y);
 				}
 			}
@@ -617,8 +658,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			result.add(new Coordinate(x + offset, y - 1));
 		}
 
-		// 앙파상
-
+		// 앙파상 g.
 
 		return result;
 	}
