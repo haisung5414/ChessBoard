@@ -258,6 +258,11 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		//메세지로 나타내야한다.
 		//체크메이트가 되면 그 상태에서 어떤 클릭을 해도 동작안한다.
 
+
+
+		//현재 차례인 사람 표시
+		showWhosTurn();
+
 		//체크메이트 검사하기
 		if(check&&!isCheckmateChecked){// 체크이고, 체크메이트 검사를 하지 않은 경우
 			Vector<Coordinate> possiblePosition = new Vector<>();
@@ -285,10 +290,6 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 			}
 		}
 
-		//모든 타일 원래 색깔로
-		flushMarkedCoordinate();
-		//현재 차례인 사람 표시
-		showWhosTurn();
 
 		//클릭 받아서 state2 execution으로 넘어가기
 		if(selectedPiece.color == currentPlayer){
@@ -335,6 +336,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		}else{ //클릭한 곳이 마킹되지 않은 곳
 			this.currentState = ChessboardState.PENDING;
 		}
+		//모든 타일 원래 색깔로
+		flushMarkedCoordinate();
 	}
 
 	//////////////////////보여지는 부분 메서드///////////////////////
