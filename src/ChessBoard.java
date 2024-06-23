@@ -313,6 +313,8 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 			//전체 기물 리스트들 새로고침
 			listOfEveryPiece.movePiece(currentPlayer, new Coordinate(selectedX, selectedY), new Coordinate(x, y));
+			//주의점. 앙파상, 캐슬링은 새로운 방식을 써야 할 듯
+
 			//내 기물 그곳으로 이동
 			setIcon(x, y, this.getIcon(this.selectedX, this.selectedY));
 			setIcon(this.selectedX, this.selectedY, new Piece());
@@ -443,7 +445,7 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	Piece[][] movePieceToNewPos(Piece[][] curChessBoard, Coordinate targetPieceCoord, Coordinate moveTo) {
 		Piece[][] changedChessBoard = new Piece[8][8];
 		for (int i = 0; i < 8; i++) {
-			for (int j = 0; j < 8; j++) {
+			for (int j = 0; j < 8; j++) { //현재 체스판 상태 그대로 대입해서 초기화하기
 				changedChessBoard[i][j] = new Piece(curChessBoard[i][j].color, curChessBoard[i][j].type);
 			}
 		}
@@ -459,17 +461,79 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	 * @param curChessBoard 확인하려는 체스판의 기물상황
 	 * @return 킹이 체크이면 true, 그렇지 않으면 false.
 	 */
-	boolean isKingCheck(Coordinate kingCoord, Piece[][] curChessBoard){
-		/*
-		킹을 중심으로
-		대각선 각 방향으로 퀸, 비숍
-		대각선 앞쪽 방향으로 폰
-		나이트 이동 가능위치에 나이트
-		직각 각 방향으로 퀸, 룩
-		있는지 확인하고 하나라도 있다면 true
-		없다면 false
-		(죽 길게 있는 놈들의 경우 아래 함수를 재사용하고 마지막 원소를 쓰면 된다.)
-		*/
+	boolean isKingCheck(Coordinate kingCoord, Piece[][] curChessBoard) {
+		PlayerColor kingColor = curChessBoard[kingCoord.y][kingCoord.x].color;
+		PlayerColor opponentColor = (kingColor == PlayerColor.white) ? PlayerColor.black : PlayerColor.white;
+
+		// 대각선 방향 검사 (퀸, 비숍)
+		int[][] diagDirections = { {-1, -1}, {-1, 1}, {1, -1}, {1, 1} }; //offset
+		for (int[] dir : diagDirections) {
+			int x = kingCoord.x;
+			int y = kingCoord.y;
+			while (checkInBorder(x + dir[0], y + dir[1])) {//while문은 checkInBorder로 확인하려는 위치가 판 바깥이 아닌 경우에만 돌아감
+				x += dir[0];
+				y += dir[1];
+				Piece p = curChessBoard[y][x];//검사하려는 칸의 기물
+				if (p.color == kingColor) break; // 아군 기물인 경우 다른 방향 대각선을 검사하러 가기 위해 break
+				if (p.color == opponentColor) { //적 기물인 경우
+					if (p.type == PieceType.queen || p.type == PieceType.bishop) {
+						return true;
+					} else break;
+				}
+				//아무 색도 없는경우, 즉 빈 칸인 경우는 while 다음 루프 돈다.
+			}
+		}
+
+		// 대각선 방향 검사 (폰)
+		int[][] pawnDirections;
+		if (kingColor == PlayerColor.white) {
+			pawnDirections = new int[][] { {-1, -1}, {-1, 1} };
+		} else { //킹의 색이 검정
+			pawnDirections = new int[][] { {1, -1}, {1, 1} };
+		}
+		for (int[] dir : pawnDirections) {
+			int newX = kingCoord.x + dir[0];
+			int newY = kingCoord.y + dir[1];
+			if (checkInBorder(newX, newY)) { //검사하려는 칸이 체스판 안에 있는 경우
+				Piece p = curChessBoard[newY][newX]; //검사하려는 칸의 기물
+				if (p.color == opponentColor && p.type == PieceType.pawn) {
+					return true;
+				}
+			}
+		}
+
+		// 수직/수평 방향 검사 (퀸, 룩)
+		int[][] orthDirections = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
+		for (int[] dir : orthDirections) {
+			int x = kingCoord.x;
+			int y = kingCoord.y;
+			while (checkInBorder(x + dir[0], y + dir[1])) {
+				x += dir[0];
+				y += dir[1];
+				Piece p = curChessBoard[y][x];
+				if (p.color == kingColor) break;
+				if (p.color == opponentColor) {
+					if (p.type == PieceType.queen || p.type == PieceType.rook) {
+						return true;
+					} else break;
+				}
+				//아무 색깔도 아닌 경우, 즉 빈 칸의 경우는 while 계속 진행한다.
+			}
+		}
+
+		// 나이트 방향 검사
+		int[][] knightMoves = { {2, 1}, {2, -1}, {-2, 1}, {-2, -1}, {1, 2}, {1, -2}, {-1, 2}, {-1, -2} };
+		for (int[] move : knightMoves) {
+			int newX = kingCoord.x + move[0];
+			int newY = kingCoord.y + move[1];
+			if (checkInBorder(newX, newY)) { //각 knightMoves의 움직임에 대해서, 그 칸이 체스판 위에 있는 경우
+				Piece p = curChessBoard[newY][newX];
+				if (p.color == opponentColor && p.type == PieceType.knight) {
+					return true;
+				}
+			}
+		}
+
 		return false;
 	}
 
@@ -481,7 +545,13 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 	 */
 	Coordinate findKing(PlayerColor color, Piece[][] curChessBoard){
 		Coordinate kingCoord = new Coordinate();
-
+		for(int y=0; y<8;y++){
+			for(int x=0; x<8 ; x++){
+				if(curChessBoard[y][x].type == PieceType.king || curChessBoard[y][x].color == color){
+					kingCoord = new Coordinate(x, y);
+				}
+			}
+		}
 		return kingCoord;
 	}
 
@@ -491,10 +561,11 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 		//들어온 좌표의 기물에 맞는 메서드를 불러서 쓰자.
 		switch (piece.type) {
 			case pawn -> candidate.addAll(getAvailablePawnCoordinates(x, y));
-//			case knight -> candidate.addAll(getAvailableKnightCoordinate(piece.color, x, y));
-//			case bishop -> candidate.addAll(getAvailableBishopCoordinate(piece.color, x, y));
-//			case rook -> candidate.addAll(getAvailableRookCoordinate(piece.color, x, y));
-//			case queen -> candidate.addAll(getAvailableQueenCoordinate(piece.color, x, y));
+			case knight -> candidate.addAll(getAvailableKnightCoordinates(x, y));
+			case bishop -> candidate.addAll(getAvailableBishopCoordinates(x, y));
+			case rook -> candidate.addAll(getAvailableRookCoordinates(x, y));
+			case queen -> candidate.addAll(getAvailableQueenCoordinates(x, y));
+			case king -> candidate.addAll(getAvailableKingCoordinates(x,y));
 		}
 		return candidate;
 	}
@@ -551,11 +622,70 @@ enum MagicType {MARK, CHECK, CHECKMATE};
 
 		return result;
 	}
-//	Vector<Coordinate> getAvailableRookCoordinates(){}
-//	Vector<Coordinate> getAvailableKnightCoordinates(){}
-//	Vector<Coordinate> getAvailableBishopCoordinates(){}
-//	Vector<Coordinate> getAvailableQueenCoordinates(){}
-//	Vector<Coordinate> getAvailableKingCoordinates(){}
+
+	/**
+	 * g. knight. 이동가능 좌표 전부 반환
+	 * @param x 나이트의 x
+	 * @param y 나이트의 y
+	 * @return 이동 가능 좌표들을 담은 Vector<Coordinate> 타입
+	 */
+	Vector<Coordinate> getAvailableKnightCoordinates(int x, int y) {
+		Vector<Coordinate> result = new Vector<>();
+		PlayerColor pieceColor = getTargetColor(x, y);
+		int[][] moves = {
+				{2, 1}, {2, -1}, {-2, 1}, {-2, -1},
+				{1, 2}, {1, -2}, {-1, 2}, {-1, -2}
+		};
+
+		for (int[] move : moves) {
+			int newX = x + move[0];
+			int newY = y + move[1];
+			if (checkInBorder(newX, newY) && getTargetColor(newX, newY) != pieceColor) {
+				result.add(new Coordinate(newX, newY));
+			}
+		}
+		return result;
+	}
+
+	Vector<Coordinate> getAvailableBishopCoordinates(int x, int y) {
+		return getAvailableDiagCoordinate(x, y);
+	}
+
+	Vector<Coordinate> getAvailableRookCoordinates(int x, int y) {
+		return getAvailableOrthogonalCoordinate(x, y);
+	}
+
+	Vector<Coordinate> getAvailableQueenCoordinates(int x, int y) {
+		Vector<Coordinate> result = new Vector<>();
+		result.addAll(getAvailableDiagCoordinate(x, y));
+		result.addAll(getAvailableOrthogonalCoordinate(x, y));
+		return result;
+	}
+
+	/**
+	 * g. king이 체크 신경 안쓰고, 이동 가능한 좌표 전부 반환
+	 * 이것이 왕인지는 여기서 검사하지 않는다.
+	 * @param x 이동하려는 기물의 x위치
+	 * @param y 이동하려는 기물의 y위치
+	 * @return 이동가능한 좌표 전부 반환
+	 */
+	Vector<Coordinate> getAvailableKingCoordinates(int x, int y) {
+		Vector<Coordinate> result = new Vector<>();
+		PlayerColor pieceColor = getTargetColor(x, y);
+		int[][] moves = {
+				{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+				{1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+		};
+
+		for (int[] move : moves) {
+			int newX = x + move[0];
+			int newY = y + move[1];
+			if (checkInBorder(newX, newY) && getTargetColor(newX, newY) != pieceColor) {
+				result.add(new Coordinate(newX, newY));
+			}
+		}
+		return result;
+	}
 
 	/////////////////////세부 움직임 구현////////////////////////
 
